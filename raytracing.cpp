@@ -30,6 +30,7 @@ double get_elapsed(tval t0, tval t1)
     return (double)(t1.tv_sec - t0.tv_sec) * 1000.0L + (double)(t1.tv_usec - t0.tv_usec) / 1000.0L;
 }
 
+// Classe Vecteur pour tous les éléments en 3D
 class Vector {
 	private:
 		double coords[3];
@@ -66,6 +67,7 @@ class Vector {
 
 };
 
+// Fonctions de calcul sur les vecteurs
 Vector operator+(const Vector& a, const Vector& b){
     return Vector(a[0]+b[0],a[1]+b[1],a[2]+b[2]);
 }
@@ -97,6 +99,7 @@ Vector cross_product(const Vector& a, const Vector& b) {
     return Vector(a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]);
 }
 
+// Fonction renvoyant un vecteur tiré aléatoirement centré autour d'une direction
 Vector random_cos(const Vector& N) {
     double u1 = distrib(engine);
     double u2 = distrib(engine);
@@ -119,6 +122,7 @@ Vector random_cos(const Vector& N) {
     return z*N + x * T1 + y * T2;
 }
 
+// Classe pour simplifier l'accès aux propriétés d'un rayon
 class Ray {
     public:
         Vector C;
@@ -157,7 +161,7 @@ public:
         // Maximum des minimums
         double inter_min = std::max(std::max(interx_min,intery_min),interz_min); // point où on rentre dans la boîte (si existe)
 
-        if (inter_max <0) return false;
+        if (inter_max <0) return false; // Si l'intersection se fait de l'autre côté du centre, pas d'intersection
         return inter_max > inter_min;
     }
 };
@@ -193,7 +197,7 @@ public:
     int group;       // face group
 };
  
-
+// Classe pour représenter les maillages
 class TriangleMesh : public Object {
 public:
   ~TriangleMesh() {}
@@ -203,7 +207,7 @@ public:
 		this->isTransparent = isTransparent;
     };
 
-
+    // Construction de la hiérarchie de boîtes englobantes
     void build_bvh(int debut, int fin, Node* n) {
         n->debut = debut;
         n->fin = fin;
@@ -221,6 +225,7 @@ public:
         }
         double milieu = (n->bb.coord_min[dim] + n->bb.coord_max[dim]) *0.5;
         int pivot = n->debut;
+	// On "trie" les triangles dans les deux boîtes par un algorithme semblable au tri quicksort
         for (int i = n->debut; i < n->fin; i++) {
             double middle = (vertices[indices[i].vtxi][dim] + vertices[indices[i].vtxj][dim] + vertices[indices[i].vtxk][dim]) /3.; // barycentre
             if (middle < milieu) {
@@ -232,7 +237,7 @@ public:
         n->fg = NULL;
         n->fd = NULL;
 
-        if (pivot == n->debut || pivot == n->fin || n->fin - n->debut < 5) return;
+        if (pivot == n->debut || pivot == n->fin || n->fin - n->debut < 5) return; // Arrêt si moins de 5 triangles sont concernés par les deux boîtes ou si une boîte est vide
         
         n->fg = new Node;
         n->fd = new Node;
@@ -242,7 +247,8 @@ public:
         
         
     };
-
+    
+    // Construction d'une boîte englobante contenant tous les triangles contenus entre debut et fin
     Bounding_box build_bouding (int debut, int fin) { // debut, fin : indices triangles, pas sommets
         Bounding_box bb;
         double infinite = 1E10;
@@ -266,6 +272,7 @@ public:
         return bb;
     };
 
+    // Méthode d'intersection du maillage
     bool intersect(const Ray& r, Vector& P, Vector& v_normal, double& t, Vector& color){
         t = 1E10;
         bool has_inter = false;
@@ -273,6 +280,7 @@ public:
 
         std::list<Node*> l;
         l.push_back(bvh);
+	// Parcout de la hiérarchie de boîtes
         while (!l.empty()) {
             Node*c = l.front();
             l.pop_front();
@@ -286,7 +294,7 @@ public:
                     l.push_front(c->fd);
                     
                 }
-            } else {
+            } else { // On est arrivé au bout de la hiérarchie
                 for (int i = c->debut; i < c->fin; i++) {
                     // Sommets du triangle
                     const Vector &A = vertices[indices[i].vtxi];
@@ -769,7 +777,7 @@ int main() {
     #pragma omp parallel for schedule(dynamic, 1)
 	for (int i = 0; i < H; i++) {
 		for (int j = 0; j < W; j++) {
-            //Vector u(j-W/2, i-H/2, -W/(2.*tan(fov / 2))); // Laisser commenté dans cas veut enlver anti-aliasing
+            //Vector u(j-W/2, i-H/2, -W/(2.*tan(fov / 2))); // Laisser commenté, utile dans le cas où veut enlever anti-aliasing
             Vector color = Vector(0,0,0);
             
             for (int k = 0; k<nbrays; k++) {
@@ -778,7 +786,7 @@ int main() {
                 double u2 = distrib(engine);
                 double x_objectif = taille_objectif * cos(2 * M_PI * u1) * sqrt(1 - u2);
                 double y_objectif = taille_objectif * sin(2 * M_PI * u1) * sqrt(1 - u2);
-				while( (sqr(x_objectif) + sqr(y_objectif)) > taille_objectif){ // Boucle pour retirer des variables aléatoires si le point est hors du cercle de l'objectif
+				while( (sqr(x_objectif) + sqr(y_objectif)) > taille_objectif){ // Boucle pour re-tirer des variables aléatoires si le point est hors du cercle de l'objectif
 					u1 = distrib(engine);
 					u2 = distrib(engine);
 					x_objectif = u1 * 2 * taille_objectif - taille_objectif; 
@@ -786,18 +794,18 @@ int main() {
 				}
 
                 // anti-aliasing
-				double u3 = distrib(engine);
-				double u4 = distrib(engine);
-				double x = sqrt(1 - u3) * cos(2 * M_PI * u4);
-				double y = sqrt(1 - u3) * sin(2 * M_PI * u4);
+		double u3 = distrib(engine);
+		double u4 = distrib(engine);
+		double x = sqrt(1 - u3) * cos(2 * M_PI * u4);
+		double y = sqrt(1 - u3) * sin(2 * M_PI * u4);
 
-				Vector u(j - W / 2 + x, i - H / 2 + y, -W / (2 * tan(fov / 2)));
-				u = u.get_normalized();
+		Vector u(j - W / 2 + x, i - H / 2 + y, -W / (2 * tan(fov / 2)));
+		u = u.get_normalized();
 
                 // Modification de u pour mouvement caméra
                 //u = u[0] * right + u[1] * up + u[2] * viewDirection;
 
-
+		
                 Vector target = C + focale*u;
                 Vector new_C = C + Vector(x_objectif,y_objectif,0);
                 Vector new_u = (target - new_C).get_normalized();
